@@ -1,0 +1,62 @@
+1. Thông tin 3 productline có số lần bị hủy nhiều nhất (tính theo orderDetails) trong năm 2004
+SELECT pl.*, (SELECT COUNT(*)
+					 FROM orderDetails
+                     WHERE productCode IN (SELECT productCode
+										   FROM products
+                                           WHERE pl.productline = productline)
+					   AND orderNumber IN (SELECT orderNumber
+										   FROM orders
+                                           WHERE status = 'Cancelled' AND YEAR(orderDate) = 2004)) AS total
+FROM productlines pl
+ORDER BY total DESC LIMIT 3;
+
+
+2. Thông tin người nợ xấu (debt/purchase >= 0.4)
+
+SELECT c.*, (SELECT IF(SUM(quantityOrdered * priceEach) IS NULL, 0, SUM(quantityOrdered * priceEach))
+						FROM orderDetails
+                        WHERE orderNumber IN (SELECT orderNumber
+											  FROM orders
+                                              WHERE c.customerNumber = customerNumber)) AS totalPurchase,
+						(SELECT IF(SUM(amount) IS NULL, 0, SUM(amount))
+						 FROM payments
+                         WHERE customerNumber = c.customerNumber) AS totalPaid, 
+                         (SELECT totalPurchase - totalPaid) AS debt
+FROM customers c
+HAVING debt/totalPurchase >= 0.4;
+
+3.Write 1 query to display name, text description, and the total quantity of products of productlines that have total quantity of products greater than 50000. Sort them in descending order of quantity (total quantity of products = in stock + sold)
+
+SELECT pl.*, (SELECT SUM(quantityInStock)
+					 FROM products
+                     WHERE productline = pl.productline) AS totalInStock, 
+                     (SELECT SUM(quantityOrdered)
+                      FROM orderDetails
+                      WHERE productCode IN (SELECT productCode
+											FROM products
+                                            WHERE productline = pl.productline)) AS totalSold, 
+					(SELECT totalInStock + totalSold) AS totalQuantity
+FROM productlines pl
+HAVING totalQuantity >= 50000
+ORDER BY totalQuantity DESC;
+
+4.productCode productName profit1 profit2 difference group
+ 6 cột
+profit1 là sum của quantityOrder * (msrp - buyPrice)
+
+profit2 là sum của quantityOrder * (priceEach - buyPrice)
+
+difference là profit1 - profit2
+
+4 chữ cái đầu trong tên < 1940 thì là group1, còn lại là 2 (kể cả mấy con 18th century)
+
+ SELECT productCode, productName, (SELECT SUM(quantityOrdered * (MSRP - buyPrice))
+								  FROM orderDetails
+                                  WHERE productCode = p.productCode) AS profit1, 
+                                  (SELECT SUM(quantityOrdered * (o.priceEach - buyPrice))
+                                   FROM orderDetails o
+                                   WHERE productCode = p.productCode) AS profit2, 
+								  (SELECT profit1 - profit2) AS difference,
+                                  SUBSTRING(productName, 1 ,4) AS first4Char,
+                                  (SELECT IF(first4Char REGEXP '^[0-9]+$' AND first4Char < 1940, 1, 2)) AS 'Group'
+FROM products p;
